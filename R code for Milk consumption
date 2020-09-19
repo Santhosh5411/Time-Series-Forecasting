@@ -1,0 +1,236 @@
+##Importing all the necessary libraries
+##Forecast has library support for time series to create graphs that depict seasonality , trend and noise in the data
+install.packages("forecast")
+library(forecast) 
+install.packages("tseries")
+library(tseries)
+
+###Reading time series data inside R###
+
+#Importing new data
+# Monthly milk production: pounds per cow. Jan 62 to Dec 74, 
+# adjusted for month length
+#Setting up my new library 
+setwd("D:\\R Files")
+milk<-read.csv("milk.csv",stringsAsFactors = F)
+View(milk)
+#Removing month attribute
+milk<-milk[-1]
+View(milk)
+dim(milk)
+sum(is.na(milk))
+
+class(milk)
+
+
+# Convert the data frame into a time series object, using ts() function.
+# ts() function belongs to forecast package
+
+?ts()
+ml<-ts(milk,start=1962,frequency=12)
+class(ml)
+ml
+start(ml)
+end(ml)
+frequency(ml)
+cycle(ml)
+plot(ml)
+
+# Explore the time series
+
+# Aggregating the time series
+
+# Yearly totals
+
+?aggregate
+aggregate(ml)
+plot(aggregate(ml))
+
+# Increasing trend
+
+?aggregate()
+aggregate(ml, FUN = mean)
+plot(aggregate(ml, FUN = mean))
+
+# Milk production has been increasing year after year.
+
+# Boxplot creates one boxplor for each month
+?boxplot
+b1<-boxplot(ml~cycle(ml))
+b1
+
+
+# Milk production in May and June is higher than rest of the months.
+
+
+#Subsetting the time series using window function
+# We shall create two windows (1962 to 1972) and (1972 to 1974)
+# Creating Training and Testing Window datasets
+# Frequency is the number of time periods in a year
+
+mlTr<-window(ml,start=c(1962,1),end=c(1971,12),frequency=12)
+dim(mlTr)
+
+mlT<-window(ml,start=c(1972,1),end=c(1974,12),frequency=12)
+dim(mlT)
+
+
+plot(mlTr)
+plot(mlT)
+
+
+# We shall create a time series model on (1962 to 1972)
+# and forecast for the period (1972 to 1974)
+# We shall then compare the forecasts with the actual time series data
+
+#Data has both trend and seasonality
+
+#Decomposing the Time Series into seasonal, trend and irregular
+# components with additive seasonality
+?decompose
+dec<-decompose(mlTr)
+plot(dec)
+# Top panel contains the original time series
+# Second panel contains the trend
+# Third panel contains the seasonality component
+# Last panel contains random fluctuations
+
+#exponential smoothing on training window dataset
+?
+?ses
+??TM
+# To forecast milk production for the next 10 months
+
+es<-ses(mlTr,h=10)
+plot(es)
+summary(es)
+
+es$x
+
+es$fitted
+
+es$residuals
+
+
+100*es$residuals/es$x # PE
+
+mean(abs(100*es$residuals/es$x))
+
+
+# Finding the accuracy of exponential smoothing model
+
+accuracy(es,mlT)
+
+# Checking residuals
+
+checkresiduals(es)
+
+# There is a pattern in the resuduals. Therefore this forecast is 
+# not sufficiently an accurate forecast.
+# Hence, we use the Holt's method.
+
+#Fitting holts's model
+hol<-holt(mlTr,h=10) #forecasting for 10 periods
+plot(hol)
+summary(hol)
+accuracy(hol,mlT)
+checkresiduals(hol)
+?Box.test
+Box.test(hol$residuals, lag = 20, type = "Ljung-Bo")
+
+?checkresiduals
+# Blue line is slightly elevated, meaning that this forecast 
+# is betterthan the previous one.
+# The Ljung-Box test reveals that p-value is low.
+# Ho: Data is identically and independently distributed (white noise)
+# Ha:  Data is not identically and independently 
+# distributed (exhibits serial correlation)
+# Therefore we reject Ho and conclude that data exhibits serial correlation.
+
+#Clearly the series is seasonal so seasonal component is required
+
+# Finally trying the holt winter's method 
+
+
+### Holt Winter's Model for Trend & Seasonality 
+
+?hw
+
+hwTS<-hw(mlTr,h=10)
+hwTS
+
+plot(hwTS)
+
+accuracy(hwTS,mlT)
+
+summary(hwTS)
+
+checkresiduals(hwTS)
+
+
+# p-value is high, indicating that data is identically and 
+#independently distributed 
+
+#	All spikes are below blue line.
+# There's no pattern in the residuals
+# Histogram is also closer to bell-shaped
+
+#Automating model building using ets()
+?ets()
+auto<-ets(mlTr)
+summary(auto)
+
+# The MAPE is less than 7 and it seems like a good MAPE.
+
+foc<-forecast(auto,h=10)
+foc
+plot(foc)
+
+checkresiduals(foc)
+
+
+
+# ARIMA
+
+# Integration Part
+
+plot.ts(mlTr)
+
+# Stationarizing the series by differencing it
+
+mlTrdiff1 <- diff(mlTr, differences = 1)
+mlTrdiff1
+
+# Checking for stationarity
+
+plot.ts(mlTrdiff1)
+
+# statistical way of checking stationarity
+
+?adf.test
+adf.test(mlTrdiff1)
+
+
+mlTrdiff2 <- diff(mlTr, differences = 2)
+mlTrdiff2
+plot(mlTrdiff2)
+adf.test(mlTrdiff2)
+
+# Optimal d is 1
+
+
+# Sometimes we might require taking the log of the time series 
+
+# We can use auto.arima() to find optimal values of p.d and q.
+
+auto.arima(mlTr)
+
+# Running the final ARIMA model
+?arima
+mlTrarima <- arima(mlTr, c(0,1,0), seasonal = list(order = c(0,1,1), period =12))
+mlTrarima
+mlTrarimaF <- forecast(mlTrarima, h = 10)
+plot(mlTrarimaF)
+# Validating the model
+checkresiduals(mlTrarimaF)
+mlTrarimaF
